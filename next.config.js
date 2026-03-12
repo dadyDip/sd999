@@ -1,9 +1,9 @@
-import nextMDX from "@next/mdx";
+// import nextMDX from "@next/mdx";
 
-const withMDX = nextMDX({
-  extension: /\.mdx$/,
-});
+// const withMDX = nextMDX({
+//   extension: /\.mdx$/,
+// });
 
-export default withMDX({
-  pageExtensions: ["js", "jsx", "mdx"],
-});
+// export default withMDX({
+//   pageExtensions: ["js", "jsx", "mdx"],
+// });

@@ -68,7 +68,7 @@ model Bonus {
   expiresAt       DateTime?          // When bonus expires if not used
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
-  
+  metadata        Json?  
   // Relations
   user            User               @relation(fields: [userId], references: [id])
   transactions    BonusTransaction[]

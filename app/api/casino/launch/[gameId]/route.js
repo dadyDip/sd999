@@ -4,8 +4,8 @@ import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import prisma from '@/server/prisma';
 
-const JILI_TOKEN = "73b16eef2a0284be52da708883e0180f";
-const JILI_SECRET = process.env.JILI_SECRET || "41cbb6f2aceeff62d7ea0a7e96031a3b";
+const JILI_TOKEN = "8eaca653a0397f5dd39a8dbdc4a7e2e5";
+const JILI_SECRET = process.env.JILI_SECRET || "f42ef5956cc16c923b186300c94744da";
 const JILI_SERVER_URL = "https://igamingapis.live/api/v1";
 
 function encryptPayload(payload, secretKey) {
@@ -173,16 +173,30 @@ export async function GET(request, { params }) {
       );
     }
     
-    // 4. CREATE MATCH ID
-    const matchId = `jili_${Date.now()}_${user.casinoId}_${gameId}`;
-    console.log(`Generated Match ID: ${matchId}`);
+    // ==================== FIX: DETECT PROVIDER FROM GAME ID ====================
+    const spribeGameIds = ['737', '738', '739'];
+    const isSpribe = spribeGameIds.includes(gameId);
+    const isJili = !isSpribe; // Default to Jili for others
+    
+    // Create provider-specific prefix
+    const providerPrefix = isSpribe ? 'spribe' : 'jili';
+    const providerName = isSpribe ? 'SPRIBE' : 'JILI';
+    
+    // Create DIFFERENT callback URLs based on provider
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://sd99909.com';
+    
+    const callbackUrl = `${baseUrl}/api/casino/callback?matchId=`;
+    
+    // 4. CREATE MATCH ID WITH CORRECT PREFIX
+    const matchId = `${providerPrefix}_${Date.now()}_${user.casinoId}_${gameId}`;
+    console.log(`Generated Match ID: ${matchId} (Provider: ${providerName})`);
     
     // 5. CREATE CASINO GAME SESSION
     try {
       await prisma.casinoGame.create({
         data: {
           userId: user.id,
-          gameType: `JILI_${gameId}`,
+          gameType: `${providerName}_${gameId}`,
           stake: 0,
           matchId: matchId,
           status: 'PLAYING',
@@ -211,16 +225,14 @@ export async function GET(request, { params }) {
     
     const gameUidValue = parseInt(gameId) || 0;
     
-    // Get base URL
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://ashokheli.top';
     console.log("Using base URL:", baseUrl);
     
     // Create URLs
     const returnUrl = `${baseUrl}/casino/return-game?matchId=${matchId}`;
-    const callbackUrl = `${baseUrl}/api/casino/callback?matchId=${matchId}`;
+    const fullCallbackUrl = callbackUrl + matchId;
     
     console.log("Return URL:", returnUrl);
-    console.log("Callback URL:", callbackUrl);
+    console.log("Callback URL:", fullCallbackUrl);
     
     const payload = {
       user_id: parseInt(user.casinoId),
@@ -229,7 +241,7 @@ export async function GET(request, { params }) {
       token: JILI_TOKEN,
       timestamp: Date.now(),
       return: returnUrl,
-      callback: callbackUrl,
+      callback: fullCallbackUrl,
       currency_code: 'BDT',
       language: 'en',
       brand_id: parseInt(providerId) || 49
@@ -296,7 +308,7 @@ export async function GET(request, { params }) {
       const gameUrl = apiResponse.data.url;
       console.log("🎮 Game URL received:", gameUrl);
       
-      // Store game session for tracking - FIX 2: REMOVED gameUrl FIELD
+      // Store game session for tracking
       try {
         await prisma.gameSession.create({
           data: {
@@ -304,10 +316,9 @@ export async function GET(request, { params }) {
             userId: user.id,
             gameCode: gameId.toString(),
             balance: availableBalanceTaka,
-            provider: 'jili',
+            provider: providerPrefix,
             brandId: providerId,
             status: 'launched'
-            // Removed: gameUrl: gameUrl - field doesn't exist in schema
           }
         });
         
@@ -325,8 +336,8 @@ export async function GET(request, { params }) {
           matchId: matchId,
           casinoId: user.casinoId,
           gameCode: gameId,
-          gameName: `Game ${gameId}`,
-          provider: 'JILI',
+          gameName: `${providerName} Game ${gameId}`,
+          provider: providerName,
           userBalanceTaka: availableBalanceTaka,
           userBalancePaisa: availableBalancePaisa,
           providerId: providerId,

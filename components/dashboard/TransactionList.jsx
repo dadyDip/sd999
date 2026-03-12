@@ -1,192 +1,251 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/app/design/ui/dialog";
-import { ArrowDown, ArrowUp, X } from "lucide-react";
-import { useLang } from "@/app/i18n/useLang";
+import { ArrowDown, ArrowUp, X, Calendar } from "lucide-react";
+import { useMemo, useState } from "react";
 
-export function TransactionList({ transactions }) {
-  const { t, lang } = useLang();
-  const [open, setOpen] = useState(false);
-  const [selectedType, setSelectedType] = useState(null);
+export function TransactionModal({ isOpen, onClose, transactions = [], type }) {
 
-  const types = [
-    {
-      key: "deposit",
-      label: t.depositRecords || "Deposit Records",
-      icon: <ArrowDown className="h-5 w-5 text-emerald-400" />,
-      filter: (tx) => (tx.type ?? "").toUpperCase() === "DEPOSIT",
-      color: "bg-emerald-800 hover:bg-emerald-700",
-      showTotal: true,
-    },
-    {
-      key: "withdraw",
-      label: t.withdrawRecords || "Withdraw Records",
-      icon: <ArrowUp className="h-5 w-5 text-blue-400" />,
-      filter: (tx) => (tx.type ?? "").toUpperCase() === "WITHDRAW",
-      color: "bg-blue-800 hover:bg-blue-700",
-      showTotal: true,
-    }
+  const [tab, setTab] = useState("today");
+
+  const tabs = [
+    { id: "today", label: "আজ" },
+    { id: "yesterday", label: "গতকাল" },
+    { id: "7days", label: "7 দিন" },
+    { id: "30days", label: "30 দিন" },
+    { id: "all", label: "সব" }
   ];
 
-  const openModal = (type) => {
-    setSelectedType(type);
-    setOpen(true);
-  };
+  const filteredTransactions = useMemo(() => {
+    // First, ensure transactions is an array
+    const transactionList = Array.isArray(transactions) ? transactions : [];
+    let list = [...transactionList];
 
-  // Filtered transactions - ALL TIME, no date restrictions
-  const filtered = selectedType
-    ? transactions.filter(selectedType.filter)
-    : [];
+    // Filter ONLY COMPLETED transactions first (matches dashboard pattern)
+    list = list.filter((tx) => 
+      (tx.status ?? "").toUpperCase() === "COMPLETED"
+    );
 
-  // Total amounts for ALL TIME
-  const totalAmount = useMemo(() => {
-    if (!selectedType?.showTotal) return 0;
-    return filtered.reduce((sum, tx) => sum + (tx.amount ?? 0), 0);
-  }, [filtered, selectedType]);
+    // Then filter by type if specified
+    if (type && type !== "all") {
+      list = list.filter(
+        (tx) => (tx.type ?? "").toUpperCase() === type?.toUpperCase()
+      );
+    }
 
-  // Sort transactions by date (newest first)
-  const sortedFiltered = useMemo(() => {
-    return [...filtered].sort((a, b) => {
-      const dateA = a.createdAt ? new Date(a.createdAt) : new Date(0);
-      const dateB = b.createdAt ? new Date(b.createdAt) : new Date(0);
-      return dateB - dateA;
-    });
-  }, [filtered]);
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
 
-  const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    const today = new Date();
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-    
-    if (date.toDateString() === today.toDateString()) {
-      return lang === 'bn' ? 'আজ' : 'Today';
-    } else if (date.toDateString() === yesterday.toDateString()) {
-      return lang === 'bn' ? 'গতকাল' : 'Yesterday';
-    } else {
-      return date.toLocaleDateString(lang === 'bn' ? 'bn-BD' : 'en-GB', {
-        day: 'numeric',
-        month: 'short',
-        year: 'numeric'
+    // Filter by date tab
+    if (tab === "today") {
+      list = list.filter((tx) => {
+        const d = new Date(tx.createdAt);
+        d.setHours(0, 0, 0, 0);
+        return d.getTime() === now.getTime();
       });
     }
+
+    if (tab === "yesterday") {
+      const y = new Date();
+      y.setDate(now.getDate() - 1);
+      y.setHours(0, 0, 0, 0);
+
+      list = list.filter((tx) => {
+        const d = new Date(tx.createdAt);
+        d.setHours(0, 0, 0, 0);
+        return d.getTime() === y.getTime();
+      });
+    }
+
+    if (tab === "7days") {
+      const past = new Date();
+      past.setDate(now.getDate() - 7);
+      list = list.filter((tx) => new Date(tx.createdAt) >= past);
+    }
+
+    if (tab === "30days") {
+      const past = new Date();
+      past.setDate(now.getDate() - 30);
+      list = list.filter((tx) => new Date(tx.createdAt) >= past);
+    }
+
+    // Sort by date (newest first)
+    list.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    return list;
+
+  }, [transactions, type, tab]);
+
+  const formatDate = (date) => {
+    return new Date(date).toLocaleString("bn-BD", {
+      dateStyle: "medium",
+      timeStyle: "short"
+    });
   };
 
-  const formatTime = (dateString) => {
-    const date = new Date(dateString);
-    return date.toLocaleTimeString(lang === 'bn' ? 'bn-BD' : 'en-GB', {
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+  // Calculate totals for the modal
+  const { totalDeposit, totalWithdraw } = useMemo(() => {
+    const deposit = filteredTransactions
+      .filter(tx => (tx.type ?? "").toUpperCase() === "DEPOSIT")
+      .reduce((sum, tx) => sum + (tx.amount || 0), 0);
+
+    const withdraw = filteredTransactions
+      .filter(tx => (tx.type ?? "").toUpperCase() === "WITHDRAW")
+      .reduce((sum, tx) => sum + (tx.amount || 0), 0);
+
+    return {
+      totalDeposit: deposit,
+      totalWithdraw: withdraw
+    };
+  }, [filteredTransactions]);
+
+  if (!isOpen) return null;
+
+  // Determine title based on type
+  const getTitle = () => {
+    if (type?.toUpperCase() === "DEPOSIT") return "জমা রেকর্ড";
+    if (type?.toUpperCase() === "WITHDRAW") return "উত্তোলন রেকর্ড";
+    return "লেনদেন রেকর্ড";
   };
 
   return (
-    <section className="space-y-4">
-      <h2 className="text-xl font-semibold text-white">{t.recentTransactions || "Recent Transactions"}</h2>
+    <div className="fixed inset-0 z-50 bg-white flex flex-col h-screen">
 
-      {/* BUTTONS - Only 2 now */}
-      <div className="grid grid-cols-2 gap-3">
-        {types.map((type) => (
-          <button
-            key={type.key}
-            onClick={() => openModal(type)}
-            className={`flex flex-col items-center justify-center gap-1 p-4 rounded-xl shadow-md transition ${type.color}`}
-          >
-            {type.icon}
-            <span className="text-white text-sm font-semibold text-center">
-              {type.label}
-            </span>
-          </button>
-        ))}
+      {/* HEADER */}
+      <div className="bg-red-700 text-white p-4 flex items-center justify-between">
+        <button onClick={onClose}>
+          <X className="w-5 h-5" />
+        </button>
+        <h2 className="font-semibold text-lg">{getTitle()}</h2>
+        <div className="w-5" />
       </div>
 
-      {/* MODAL */}
-      <Dialog open={open} onOpenChange={() => setOpen(false)}>
-        <DialogContent className="w-full max-w-md bg-gray-900 border border-white/10 rounded-2xl p-4">
-          <DialogHeader className="flex justify-between items-center">
-            <DialogTitle className="text-white">{selectedType?.label}</DialogTitle>
-            <button onClick={() => setOpen(false)} className="text-white/60 hover:text-white">
-              <X className="h-5 w-5" />
+      {/* SLIDING TABS */}
+      <div className="border-b overflow-x-auto mt-2">
+        <div className="flex min-w-max">
+          {tabs.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={`px-4 py-3 text-sm whitespace-nowrap transition ${
+                tab === t.id
+                  ? "text-blue-600 border-b-2 border-blue-600 font-medium"
+                  : "text-gray-600"
+              }`}
+            >
+              {t.label}
             </button>
-          </DialogHeader>
+          ))}
+        </div>
+      </div>
 
-          {/* Show total amount - ALL TIME */}
-          {selectedType?.showTotal && sortedFiltered.length > 0 && (
-            <div className="text-lg font-bold my-2 text-white/90 p-3 bg-white/5 rounded-lg">
-              {selectedType.key === "withdraw" && `${t.totalWithdraw || "Total Withdrawn"}: ৳ ${(totalAmount / 100).toFixed(2)}`}
-              {selectedType.key === "deposit" && `${t.totalDeposit || "Total Deposited"}: ৳ ${(totalAmount / 100).toFixed(2)}`}
-              <span className="text-xs text-white/50 ml-2">
-                ({sortedFiltered.length} {sortedFiltered.length === 1 ? 'transaction' : 'transactions'})
-              </span>
+      {/* FILTER BUTTONS */}
+      <div className="flex gap-2 p-3 border-b bg-white">
+        <button className="border border-blue-500 text-blue-500 px-3 py-1 rounded-md text-sm">
+          সব
+        </button>
+        <button className="border border-blue-500 text-blue-500 px-3 py-1 rounded-md text-sm">
+          প্রকার
+        </button>
+        <button className="border border-blue-500 text-blue-500 px-3 py-1 rounded-md text-sm flex items-center gap-1">
+          <Calendar size={14} />
+          03/08 - 03/08
+        </button>
+      </div>
+
+      {/* SUMMARY TOTALS (if showing all or specific type) */}
+      {filteredTransactions.length > 0 && (
+        <div className="px-4 py-2 bg-gray-50 border-b">
+          {!type || type === "all" ? (
+            <div className="flex justify-between text-xs">
+              <div>
+                <span className="text-gray-500">মোট জমা: </span>
+                <span className="font-medium text-gray-900">৳ {(totalDeposit / 100).toFixed(2)}</span>
+              </div>
+              <div>
+                <span className="text-gray-500">মোট উত্তোলন: </span>
+                <span className="font-medium text-green-600">৳ {(totalWithdraw / 100).toFixed(2)}</span>
+              </div>
+            </div>
+          ) : (
+            <div className="text-xs text-gray-500">
+              মোট {filteredTransactions.length} টি লেনদেন
             </div>
           )}
+        </div>
+      )}
 
-          <div className="space-y-2 max-h-[60vh] overflow-y-auto mt-2">
-            {sortedFiltered.length === 0 ? (
-              <p className="text-white/40 p-4 text-center">
-                {t.noTransactions || "No transactions yet"}
-              </p>
-            ) : (
-              sortedFiltered.map((tx) => {
-                const type = tx.type ?? "UNKNOWN";
-                const amount = tx.amount ?? 0;
-                const createdAt = tx.createdAt ? new Date(tx.createdAt) : new Date();
-                const status = tx.status ?? "Unknown";
-                const isDeposit = type.toUpperCase() === "DEPOSIT";
-
-                return (
-                  <div
-                    key={tx.id}
-                    className="flex justify-between items-center p-3 rounded-lg bg-gray-800/50 hover:bg-gray-700/50 transition border border-white/5"
-                  >
-                    <div className="flex flex-col">
-                      <div className="flex items-center gap-2">
-                        {isDeposit ? (
-                          <ArrowDown className="h-4 w-4 text-emerald-400" />
-                        ) : (
-                          <ArrowUp className="h-4 w-4 text-blue-400" />
-                        )}
-                        <p className="font-medium text-sm text-white">
-                          {type}
-                        </p>
-                      </div>
-                      <p className="text-xs text-white/50 mt-1">
-                        {formatDate(createdAt)} at {formatTime(createdAt)}
-                      </p>
-                      {tx.provider && (
-                        <p className="text-xs text-white/40 mt-0.5">
-                          via {tx.provider} {tx.reference && `• ${tx.reference.slice(-4)}`}
-                        </p>
-                      )}
-                      <p className="text-xs text-white/40 mt-0.5">
-                        Status: <span className={`${status === 'APPROVED' ? 'text-emerald-400' : status === 'PENDING' ? 'text-yellow-400' : 'text-red-400'}`}>
-                          {status}
-                        </span>
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className={`font-bold ${isDeposit ? 'text-emerald-400' : 'text-blue-400'}`}>
-                        ৳ {(amount / 100).toFixed(2)}
-                      </p>
-                      <p className="text-xs text-white/40 mt-1">
-                        {tx.id?.slice(-8)}
-                      </p>
-                    </div>
-                  </div>
-                );
-              })
-            )}
+      {/* CONTENT AREA */}
+      <div className="flex-1 overflow-y-auto">
+        {filteredTransactions.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full text-blue-500">
+            <div className="text-6xl mb-4">📦</div>
+            <p className="text-lg font-medium">কোন ডেটা নেই</p>
+            <p className="text-sm text-gray-500 mt-2">এই সময়ে কোনো COMPLETED লেনদেন পাওয়া যায়নি</p>
           </div>
+        ) : (
+          <div className="p-3 space-y-2">
+            {filteredTransactions.map((tx) => {
+              const isDeposit = (tx.type ?? "").toUpperCase() === "DEPOSIT";
 
-          {/* Summary Footer */}
-          {sortedFiltered.length > 0 && (
-            <div className="mt-4 pt-3 border-t border-white/10 text-xs text-white/40 text-center">
-              {t.showingAll || "Showing all records from account creation"}
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-    </section>
+              return (
+                <div
+                  key={tx.id}
+                  className="bg-gray-50 p-3 rounded-lg border flex justify-between items-start hover:shadow-md transition"
+                >
+                  <div>
+                    <div className="flex items-center gap-2">
+                      {isDeposit ? (
+                        <ArrowDown className="w-4 h-4 text-gray-700" />
+                      ) : (
+                        <ArrowUp className="w-4 h-4 text-green-600" />
+                      )}
+                      <p className={`text-sm font-medium ${isDeposit ? 'text-gray-900' : 'text-green-600'}`}>
+                        {isDeposit ? "জমা" : "উত্তোলন"}
+                      </p>
+                      {tx.method && (
+                        <span className="text-xs bg-gray-200 px-2 py-0.5 rounded-full text-gray-700 uppercase">
+                          {tx.method}
+                        </span>
+                      )}
+                      {/* Completed badge */}
+                      <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
+                        Completed
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {formatDate(tx.createdAt)}
+                    </p>
+                    {tx.provider && (
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        via {tx.provider} {tx.reference && `• ${tx.reference.slice(-4)}`}
+                      </p>
+                    )}
+                  </div>
+                  <div className="text-right">
+                    <p
+                      className={`font-bold ${
+                        isDeposit ? "text-gray-900" : "text-green-600"
+                      }`}
+                    >
+                      {isDeposit ? "" : "+"} ৳ {(tx.amount / 100).toFixed(2)}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      {tx.id?.slice(-8)}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* FOOTER */}
+      {filteredTransactions.length > 0 && (
+        <div className="border-t p-3 bg-white text-xs text-gray-400 text-center">
+          শুধু COMPLETED লেনদেন দেখানো হচ্ছে
+        </div>
+      )}
+    </div>
   );
 }

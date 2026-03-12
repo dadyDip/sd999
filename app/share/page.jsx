@@ -109,7 +109,7 @@ export default function SharePage() {
   const startDailyBonus = () => {
     // Check if user has made first deposit
     if (!user?.totalDeposited || user.totalDeposited < 30000) {
-      setMessage('প্রথমে ৩০০৳ ডিপোজিট করুন ৫,০০০৳ ডেইলি বোনাস পাওয়ার জন্য!');
+      setMessage('প্রথমে ৩০০৳ ডিপোজিট করুন ডেইলি বোনাস পাওয়ার জন্য!');
       setMessageType('error');
       return;
     }
@@ -163,7 +163,7 @@ export default function SharePage() {
   const claimFirstDepositBonus = async () => {
     // Check if user has made deposit between 300-500 TK
     if (!user?.totalDeposited) {
-      setMessage('১০০% - ১০০০% ওয়েলকাম বোনাস পেতে আজই ডিপোজিট করুন!');
+      setMessage('ফার্স্ট ডিপোজিট বোনাস পেতে ৩০০-৫০০৳ ডিপোজিট করুন!');
       setMessageType('error');
       return;
     }
@@ -171,7 +171,7 @@ export default function SharePage() {
     const depositAmount = user.totalDeposited / 100;
     
     if (depositAmount < 300) {
-      setMessage(`আরও ${300 - depositAmount}৳ ডিপোজিট করে ১০০০% বোনাস নিন!`);
+      setMessage(`আরও ${300 - depositAmount}৳ ডিপোজিট করে ফার্স্ট ডিপোজিট বোনাস নিন!`);
       setMessageType('error');
       return;
     }
@@ -184,7 +184,7 @@ export default function SharePage() {
     
     // Check if already claimed
     if (user?.isFirstDepositBonusClaimed) {
-      setMessage('আপনি ইতিমধ্যে ওয়েলকাম বোনাস নিয়েছেন!');
+      setMessage('আপনি ইতিমধ্যে ফার্স্ট ডিপোজিট বোনাস নিয়েছেন!');
       setMessageType('error');
       return;
     }
@@ -279,7 +279,7 @@ export default function SharePage() {
             </div>
           </div>
           <p className="text-gray-600 text-base sm:text-lg font-medium mt-4">বোনাস সিস্টেম লোড হচ্ছে...</p>
-          <p className="text-pink-500 text-sm sm:text-base mt-2">১০০০% বোনাস আপনার জন্য অপেক্ষা করছে!</p>
+          <p className="text-pink-500 text-sm sm:text-base mt-2">৫,০০০৳ বোনাস আপনার জন্য অপেক্ষা করছে!</p>
         </div>
       </div>
     );
@@ -346,7 +346,7 @@ export default function SharePage() {
 
         {/* MAIN BONUS CARDS */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-6 sm:mb-8">
-          {/* 100-1000% WELCOME BONUS - HYPE */}
+          {/* FIRST DEPOSIT BONUS - CLEANED */}
           <div className={`bg-white rounded-xl p-4 sm:p-6 border-2 ${
             user?.isFirstDepositBonusClaimed 
               ? 'border-green-300' 
@@ -359,7 +359,7 @@ export default function SharePage() {
                   ? 'bg-green-100 text-green-800' 
                   : 'bg-gradient-to-r from-pink-500 to-orange-500 text-white'
               }`}>
-                {user?.isFirstDepositBonusClaimed ? 'নিয়েছেন ✓' : '১০০-১০০০% বোনাস'}
+                {user?.isFirstDepositBonusClaimed ? 'নিয়েছেন ✓' : 'ফার্স্ট ডিপোজিট বোনাস'}
               </div>
             </div>
             
@@ -369,30 +369,23 @@ export default function SharePage() {
               </div>
               <div>
                 <div className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-pink-500 to-orange-500 bg-clip-text text-transparent">
-                  ১০,০০০৳
+                  ৫,০০০৳
                 </div>
                 <div className="text-xs text-gray-500">সর্বোচ্চ বোনাস</div>
               </div>
             </div>
 
             <h3 className="text-lg sm:text-xl font-bold text-gray-800 mb-1 sm:mb-2">
-              ১০০% - ১০০০% ওয়েলকাম বোনাস
+              ফার্স্ট ডিপোজিট বোনাস
             </h3>
             
             <p className="text-sm sm:text-base text-gray-600 mb-3 sm:mb-4">
-              ৩০০-৫০০৳ ডিপোজিট করুন ও ১০,০০০৳ পর্যন্ত বোনাস পান!
+              ৩০০-৫০০৳ ডিপোজিট করুন ও ৩০০-৫,০০০৳ পর্যন্ত বোনাস পান!
             </p>
 
             <div className="bg-gradient-to-r from-pink-50 to-orange-50 rounded-lg p-3 sm:p-4 mb-4 sm:mb-6 border border-pink-200">
-              <div className="flex items-center gap-1 sm:gap-2 text-pink-600 mb-1 sm:mb-2">
-                <Sparkles className="w-3 h-3 sm:w-4 sm:h-4" />
-                <span className="text-xs sm:text-sm font-bold">আপনার টাকা ১০ গুণ করুন এখনই!</span>
-              </div>
               <p className="text-xs sm:text-sm text-gray-700 font-medium">
-                সর্বনিম্ন: ৩০০৳ | সর্বোচ্চ: ৫০০৳ | বোনাস: ১০০% - ১০০০%
-              </p>
-              <p className="text-xs text-gray-500 mt-1">
-                🎁 বিশেষ অফার: আজই ডিপোজিট করুন দ্বিগুণ থেকে দশগুণ বোনাস!
+                সর্বনিম্ন: ৩০০৳ | সর্বোচ্চ: ৫০০৳ | বোনাস: ১০০%
               </p>
             </div>
 
@@ -402,7 +395,7 @@ export default function SharePage() {
               className={`w-full py-3 sm:py-3.5 px-4 rounded-lg font-medium text-sm sm:text-base transition-all duration-300 ${
                 user?.isFirstDepositBonusClaimed
                   ? 'bg-green-500 text-white cursor-not-allowed'
-                  : 'bg-gradient-to-r from-pink-500 to-orange-500 text-white hover:opacity-90 animate-pulse'
+                  : 'bg-gradient-to-r from-pink-500 to-orange-500 text-white hover:opacity-90'
               }`}
             >
               {claimLoading ? (
@@ -416,20 +409,20 @@ export default function SharePage() {
                   নিয়েছেন ✓
                 </span>
               ) : (
-                '১০০০% বোনাস নিন'
+                'বোনাস নিন'
               )}
             </button>
             
             {(!user?.totalDeposited || user.totalDeposited/100 < 300) && (
               <div className="mt-3 sm:mt-4 p-2 sm:p-3 bg-gradient-to-r from-yellow-50 to-orange-50 border border-yellow-300 rounded-lg">
                 <p className="text-xs sm:text-sm text-yellow-800 text-center font-bold">
-                  ⚡ ৩০০৳ ডিপোজিট করে ১০,০০০৳ বোনাস নিন! অফার শেষের পথে!
+                  ⚡ ৩০০৳ ডিপোজিট করে ৫,০০০৳ বোনাস নিন!
                 </p>
               </div>
             )}
           </div>
 
-          {/* DAILY BONUS - UP TO 5000৳ HYPE */}
+          {/* DAILY BONUS - UP TO 5000৳ */}
           <div className={`bg-white rounded-xl p-4 sm:p-6 border-2 ${
             redCardUsedToday >= 2 
               ? 'border-gray-300' 
@@ -454,7 +447,7 @@ export default function SharePage() {
                 <div className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-purple-500 to-pink-500 bg-clip-text text-transparent">
                   ৫,০০০৳
                 </div>
-                <div className="text-xs text-gray-500">প্রতিদিন সর্বোচ্চ</div>
+                <div className="text-xs text-gray-500">সর্বোচ্চ বোনাস</div>
               </div>
             </div>
 
@@ -477,14 +470,6 @@ export default function SharePage() {
                   style={{ width: `${(redCardUsedToday/2)*100}%` }}
                 ></div>
               </div>
-              <div className="flex justify-between text-xs text-gray-500 mt-2">
-                <span>🎯 ৯০%: ০.৫০-২.০০৳</span>
-                <span>💎 ১০%: ২.১০-৫.০০৳</span>
-              </div>
-              <p className="text-purple-600 font-bold text-xs sm:text-sm mt-2 flex items-center gap-1">
-                <Zap className="w-3 h-3 sm:w-4 sm:h-4" />
-                কোন টার্নওভার নেই!
-              </p>
             </div>
 
             <button
@@ -524,7 +509,7 @@ export default function SharePage() {
           </div>
         </div>
 
-        {/* REFERRAL CHALLENGE - 250৳ PER FRIEND */}
+        {/* REFERRAL CHALLENGE - 250৳ PER FRIEND - CLEANED */}
         <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl p-4 sm:p-6 mb-6 sm:mb-8 border-2 border-purple-200 hover:border-purple-300 transition-all">
           
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4 sm:mb-6">
@@ -559,7 +544,7 @@ export default function SharePage() {
           </h3>
           
           <p className="text-sm sm:text-base text-gray-600 mb-4 sm:mb-6">
-            প্রতিটি বন্ধুর জন্য ২৫০ৃ বোনাস! বন্ধু ৩০০৳ ডিপোজিট ও ৩০০০৳ বাজি ধরলেই পাবেন!
+            প্রতিটি বন্ধুর জন্য ২৫০৳ বোনাস! বন্ধু ৩০০৳ ডিপোজিট ও ৩০০০৳ বাজি ধরলেই পাবেন!
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-4 sm:mb-6">
@@ -576,11 +561,8 @@ export default function SharePage() {
             <div className="bg-white rounded-lg p-3 sm:p-4 border border-pink-200">
               <div className="flex items-center gap-2 mb-2">
                 <Zap className="w-4 h-4 sm:w-5 sm:h-5 text-pink-600" />
-                <span className="font-bold text-sm sm:text-base text-gray-800">তোলার জন্য প্রস্তুত</span>
+                <span className="font-bold text-sm sm:text-base text-gray-800">তোলা যাবে</span>
               </div>
-              <p className="text-xs text-gray-600">
-                টার্নওভার সম্পূর্ণ হলে তুলতে পারবেন
-              </p>
             </div>
           </div>
 
@@ -617,7 +599,7 @@ export default function SharePage() {
             </p>
           </div>
 
-          {/* PENDING REFERRAL REWARDS */}
+          {/* PENDING REFERRAL REWARDS - WORKING CLAIM BUTTON */}
           {referralStats.eligibleFriends?.length > 0 && (
             <div className="mt-4 sm:mt-6">
               <h4 className="text-sm sm:text-base font-bold text-gray-800 mb-3 flex items-center gap-2">
@@ -696,7 +678,7 @@ export default function SharePage() {
                 
                 if (bonus.type === 'first_deposit_300') {
                   bonusIcon = '🚀';
-                  bonusTitle = 'ওয়েলকাম বোনাস (১০০%)';
+                  bonusTitle = 'ফার্স্ট ডিপোজিট বোনাস';
                   bonusColor = 'pink';
                 } else if (bonus.type === 'red_card') {
                   bonusIcon = '🧧';
@@ -704,7 +686,7 @@ export default function SharePage() {
                   bonusColor = 'purple';
                 } else if (bonus.type === 'referral_reward') {
                   bonusIcon = '👥';
-                  bonusTitle = 'রেফারেল বোনাস (২৫০৳)';
+                  bonusTitle = 'রেফারেল বোনাস';
                   bonusColor = 'green';
                 }
                 

@@ -333,7 +333,6 @@ function PlayGameContent() {
           ))}
         </div>
         
-        {/* RoyalsBet Logo */}
         <div className="relative mb-12">
           <h1 className="text-4xl md:text-5xl font-bold italic tracking-wider">
             <span className="relative">
@@ -343,10 +342,10 @@ function PlayGameContent() {
                 animationStep === 2 ? 'from-blue-400 to-purple-600' :
                 'from-green-400 to-yellow-600'
               } transition-all duration-500`}>
-                RoyalsBet
+                SD999
               </span>
               <span className="absolute inset-0 text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-300 opacity-50 blur-sm">
-                RoyalsBet
+                SD999
               </span>
             </span>
           </h1>

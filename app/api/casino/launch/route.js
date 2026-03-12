@@ -3,8 +3,8 @@ import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import prisma from '@/server/prisma';
 
-const JILI_TOKEN = "73b16eef2a0284be52da708883e0180f";
-const JILI_SECRET = process.env.JILI_SECRET || "41cbb6f2aceeff62d7ea0a7e96031a3b";
+const JILI_TOKEN = "8eaca653a0397f5dd39a8dbdc4a7e2e5";
+const JILI_SECRET = process.env.JILI_SECRET || "f42ef5956cc16c923b186300c94744da";
 const JILI_SERVER_URL = "https://igamingapis.live/api/v1";
 
 function encryptPayload(payload, secretKey) {

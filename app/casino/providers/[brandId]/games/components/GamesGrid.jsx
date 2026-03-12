@@ -1,7 +1,9 @@
-// app/casino/providers/[brandId]/games/components/GamesGrid.js - MATCHING CASINO PAGE DESIGN
+// app/casino/providers/[brandId]/games/components/GamesGrid.js - CLEAN VERSION WITH HOMEPAGE DESIGN
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { Search, Play, Sparkles, ArrowLeft } from "lucide-react";
 
 const BRAND_LOGOS = {
   49: 'https://softapi2.shop/uploads/brands/jili.png',
@@ -17,21 +19,8 @@ const BRAND_NAMES = {
   58: 'Evolution Live'
 };
 
-const BRAND_BG_CLASSES = {
-  49: "bg-gradient-to-br from-yellow-900/20 via-black to-yellow-900/20",
-  45: "bg-white",
-  57: "bg-white",
-  58: "bg-white"
-};
-
-const BRAND_BORDER_CLASSES = {
-  49: "border border-yellow-500/30",
-  45: "border border-purple-500/20",
-  57: "border border-green-500/20",
-  58: "border border-blue-500/20"
-};
-
 export default function GamesGrid({ brandId, games }) {
+  const router = useRouter();
   const [isLaunching, setIsLaunching] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [user, setUser] = useState(null);
@@ -39,8 +28,6 @@ export default function GamesGrid({ brandId, games }) {
   
   const providerName = BRAND_NAMES[brandId] || `Provider ${brandId}`;
   const providerLogo = BRAND_LOGOS[brandId];
-  const bgClass = BRAND_BG_CLASSES[brandId];
-  const borderClass = BRAND_BORDER_CLASSES[brandId];
 
   useEffect(() => {
     async function fetchUser() {
@@ -72,56 +59,41 @@ export default function GamesGrid({ brandId, games }) {
     fetchUser();
   }, []);
 
-  const launchGame = async (game) => {
-    if (!user) {
-      alert("Please login first to play casino games");
-      window.location.href = '/login';
+  const launchGame = (game) => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      alert("দয়া করে প্রথমে লগইন করুন");
+      router.push('/login');
       return;
     }
 
     setIsLaunching(true);
     
-    try {
-      const token = localStorage.getItem('token');
-      
-      // Store game info
-      localStorage.setItem('lastGameLaunched', JSON.stringify({
-        name: game.name,
-        code: game.game_code,
-        provider: game.provider,
-        providerId: game.providerId,
-        image: game.image_url,
-        timestamp: new Date().toISOString()
-      }));
-      
-      // Redirect to our embed page (not opening new tab)
-      const embedUrl = `/casino/play/${game.game_code}?provider=${game.providerId}`;
-      window.location.href = embedUrl; // Redirect current page
-      
-    } catch (error) {
-      alert(`Error: ${error.message}`);
-      console.error(error);
-    } finally {
-      setIsLaunching(false);
-    }
+    localStorage.setItem('lastGameLaunched', JSON.stringify({
+      name: game.game_name,
+      code: game.game_code,
+      provider: game.providerName,
+      providerId: game.providerId,
+      image: game.game_img,
+      timestamp: new Date().toISOString()
+    }));
+    
+    const embedUrl = `/casino/play/${game.game_code}?provider=${game.providerId}`;
+    window.location.href = embedUrl;
   };
+
   const filteredGames = games.filter(game =>
     game.game_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    game.name?.toLowerCase().includes(searchTerm.toLowerCase())
+    game.providerName?.toLowerCase().includes(searchTerm.toLowerCase())
   );
-
-  // Format number with commas
-  const formatNumber = (num) => {
-    return new Intl.NumberFormat('en-IN').format(num);
-  };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-b from-orange-950 to-black flex items-center justify-center">
         <div className="text-center">
-          <div className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <div className="text-xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
-            Loading Premium Games...
+          <div className="w-16 h-16 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <div className="text-xl font-bold text-white drop-shadow-lg">
+            গেম লোড হচ্ছে...
           </div>
         </div>
       </div>
@@ -129,77 +101,87 @@ export default function GamesGrid({ brandId, games }) {
   }
 
   return (
-    <div className="min-h-screen bg-black overflow-x-hidden">
-      {/* Animated Neon Background - EXACT SAME AS CASINO PAGE */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-purple-900/5 via-black to-purple-900/5"></div>
-        <div className="absolute top-1/4 left-1/4 w-80 h-80 bg-purple-600 rounded-full blur-[120px] animate-pulse opacity-30"></div>
-        <div className="absolute bottom-1/3 right-1/4 w-96 h-96 bg-pink-600 rounded-full blur-[140px] animate-pulse delay-700 opacity-25"></div>
+    <div className="relative min-h-screen text-white">
+      {/* Background Image with Orange Overlay - Same as home page */}
+      <div className="fixed inset-0 z-0">
+        <img 
+          src="/images/app-bg.jpeg" 
+          alt="background" 
+          className="absolute inset-0 w-full h-full object-cover"
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-orange-900/80 via-orange-800/70 to-orange-900/90 backdrop-blur-[1px]"></div>
       </div>
 
       <div className="relative z-10">
         <div className="pt-4 pb-8 px-4 md:px-6">
           <div className="max-w-7xl mx-auto">
-            {/* Provider Header - EXACT SAME DESIGN AS CASINO PAGE */}
-            <div className="mb-10 md:mb-14">
-              <div className="flex items-center justify-center mb-6 md:mb-8">
-                <div className="w-8 md:w-12 h-0.5 bg-gradient-to-r from-transparent via-purple-500 to-transparent"></div>
-                <h2 className="text-base md:text-lg font-bold text-white mx-3 md:mx-4">{providerName} Games</h2>
-                <div className="w-8 md:w-12 h-0.5 bg-gradient-to-r from-transparent via-purple-500 to-transparent"></div>
-              </div>
-              
-              {/* Provider Info Card - Premium Design */}
-              <div className="flex flex-col md:flex-row items-center justify-between gap-6 mb-8">
-                <div className="flex items-center gap-4 md:gap-6">
-                  <div className={`w-16 h-16 md:w-20 md:h-20 rounded-xl md:rounded-2xl p-3 md:p-4 ${bgClass} ${borderClass}`}>
-                    {providerLogo ? (
-                      <img
-                        src={providerLogo}
-                        alt={providerName}
-                        className="w-full h-full object-contain"
-                      />
-                    ) : (
-                      <div className="text-2xl md:text-3xl">🎰</div>
-                    )}
-                  </div>
-                  <div>
-                    <h3 className="text-xl md:text-2xl font-bold text-white">
-                      {providerName}
-                    </h3>
-                    <div className="text-gray-400 text-sm md:text-base mt-1">
-                      {filteredGames.length} Premium Games
-                    </div>
-                  </div>
+            {/* Back Button */}
+            <button
+              onClick={() => router.back()}
+              className="mb-6 flex items-center gap-2 text-orange-300 hover:text-white transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span className="text-sm font-medium">পিছনে যান</span>
+            </button>
+
+            {/* Provider Header */}
+            <div className="mb-8 md:mb-10">
+              {/* Provider Info Card - White background for logo */}
+              <div className="flex items-center gap-4 md:gap-6">
+                {/* Logo with white background - right aligned */}
+                <div className="w-16 h-16 md:w-20 md:h-20 rounded-xl md:rounded-2xl bg-white shadow-lg flex items-center justify-center p-3 md:p-4 flex-shrink-0">
+                  {providerLogo ? (
+                    <img
+                      src={providerLogo}
+                      alt={providerName}
+                      className="w-full h-full object-contain"
+                    />
+                  ) : (
+                    <div className="text-2xl md:text-3xl text-orange-600">🎰</div>
+                  )}
                 </div>
                 
-              </div>
-            </div>
-
-            {/* Search - EXACT SAME DESIGN AS CASINO PAGE */}
-            <div className="mb-8 md:mb-10">
-              <div className="relative max-w-2xl mx-auto">
-                <input
-                  type="text"
-                  placeholder={`Search ${providerName} games...`}
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full px-5 py-3 md:px-6 md:py-4 rounded-xl md:rounded-2xl bg-gray-900/50 border border-gray-800 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50 focus:shadow-lg focus:shadow-purple-500/20 backdrop-blur-sm"
-                />
-                <div className="absolute right-4 md:right-5 top-1/2 -translate-y-1/2 text-gray-500">
-                  🔍
+                {/* Provider info - left aligned text */}
+                <div>
+                  <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold text-white drop-shadow-lg">
+                    {providerName}
+                  </h1>
+                  <div className="flex items-center gap-3 mt-1">
+                    <span className="text-orange-300 text-sm md:text-base">
+                      {filteredGames.length} টি গেম
+                    </span>
+                    <span className="w-1 h-1 rounded-full bg-orange-400/50"></span>
+                    <span className="text-orange-200/90 text-sm md:text-base">
+                      প্রিমিয়াম গেম কালেকশন
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Games Grid - EXACT SAME DESIGN AS CASINO PAGE */}
+            {/* Search Bar */}
+            <div className="mb-8 md:mb-10">
+              <div className="relative max-w-2xl">
+                <input
+                  type="text"
+                  placeholder={`${providerName} গেমস খুঁজুন...`}
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full px-5 py-3 md:px-6 md:py-4 rounded-xl md:rounded-2xl bg-orange-900/40 border-2 border-orange-400/30 text-white placeholder-orange-200/70 focus:outline-none focus:border-orange-400 focus:bg-orange-900/60 backdrop-blur-sm text-sm md:text-base"
+                />
+                <Search className="absolute right-4 md:right-5 top-1/2 -translate-y-1/2 w-4 h-4 md:w-5 md:h-5 text-orange-300" />
+              </div>
+            </div>
+
+            {/* Games Grid - EXACT same as homepage */}
             {filteredGames.length === 0 ? (
-              <div className="text-center py-20">
-                <div className="text-6xl mb-4">🎮</div>
-                <div className="text-2xl text-gray-300 mb-2">No games found</div>
-                <div className="text-gray-500">Try a different search term</div>
+              <div className="text-center py-16 bg-orange-900/20 rounded-xl border-2 border-orange-500/20">
+                <div className="text-6xl mb-4 opacity-50">🎮</div>
+                <div className="text-xl md:text-2xl text-orange-200 mb-2">কোনো গেম পাওয়া যায়নি</div>
+                <div className="text-orange-300/70">অন্য কিছু খুঁজুন</div>
               </div>
             ) : (
-              <div className="grid grid-cols-3 md:grid-cols-5 gap-3 md:gap-4">
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-2 md:gap-3 lg:gap-4">
                 {filteredGames.map((game) => {
                   const gameImage = game.game_img || game.img || game.image;
                   const gameName = game.game_name || game.name;
@@ -208,39 +190,42 @@ export default function GamesGrid({ brandId, games }) {
                     <div
                       key={game.game_code}
                       onClick={() => launchGame(game)}
-                      className="group relative transition-all duration-300 hover:scale-105 cursor-pointer"
+                      className="relative rounded-lg lg:rounded-xl overflow-hidden group cursor-pointer transition-all duration-300 hover:scale-[1.04] hover:shadow-2xl hover:shadow-orange-500/30 border-2 border-transparent hover:border-orange-400/50"
                     >
-                      {/* Square Card - EXACT SAME AS CASINO PAGE */}
-                      <div className="aspect-square rounded-lg md:rounded-xl overflow-hidden bg-gradient-to-br from-gray-900 to-black border border-gray-800 hover:border-purple-500/50 shadow-lg">
+                      <div className="relative w-full aspect-[3/4]">
                         {/* Game Image */}
-                        {gameImage ? (
-                          <img
-                            src={gameImage}
-                            alt={gameName}
-                            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                            loading="lazy"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <div className="text-xl md:text-2xl">🎮</div>
-                          </div>
-                        )}
+                        <img
+                          src={gameImage}
+                          alt={gameName}
+                          className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                          loading="lazy"
+                          onError={(e) => {
+                            e.target.src = "https://softapi2.shop/uploads/games/default.png";
+                          }}
+                        />
                         
-                        {/* Gradient Overlay */}
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent opacity-70"></div>
+                        {/* Gradient Overlay - exactly like homepage */}
+                        <div className="absolute inset-0 bg-gradient-to-t from-orange-950/90 via-transparent to-transparent" />
                         
-                        {/* Game Name Badge */}
-                        <div className="absolute bottom-0 left-0 right-0 p-1.5 md:p-2 bg-gradient-to-t from-black/90 to-transparent">
-                          <div className="text-white text-xs md:text-sm font-medium truncate text-center">
-                            {gameName}
+                        {/* Provider Badge - exactly like homepage */}
+                        <div className="absolute top-1.5 left-1.5 lg:top-2 lg:left-2">
+                          <div className="px-1.5 py-0.5 md:px-2 md:py-1 rounded-md lg:rounded-lg bg-orange-900/80 backdrop-blur-sm border border-orange-400/30 text-white text-[10px] md:text-xs lg:text-sm font-bold truncate max-w-[60px] md:max-w-[70px] lg:max-w-[80px]">
+                            {game.providerName}
                           </div>
                         </div>
                         
-                        {/* Play Overlay - EXACT SAME AS CASINO PAGE */}
-                        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                          <div className="bg-purple-600/90 px-4 py-2 rounded-full text-white text-xs font-bold">
-                            PLAY NOW
+                        {/* Play Overlay - exactly like homepage */}
+                        <div className="absolute inset-0 bg-orange-900/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+                          <div className="w-8 h-8 md:w-10 md:h-10 lg:w-12 lg:h-12 rounded-full bg-gradient-to-r from-orange-500 to-amber-600 flex items-center justify-center shadow-2xl shadow-orange-500/50 animate-pulse">
+                            <Play className="w-3 h-3 md:w-4 md:h-4 lg:w-5 lg:h-5 text-white" fill="white" />
                           </div>
+                        </div>
+                      </div>
+
+                      {/* Game Name - exactly like homepage */}
+                      <div className="absolute bottom-0 left-0 right-0 p-1.5 md:p-2 lg:p-3 bg-gradient-to-t from-orange-900 via-orange-800/90 to-transparent">
+                        <div className="text-white font-bold text-[10px] md:text-xs lg:text-sm text-center truncate drop-shadow-lg leading-tight">
+                          {gameName}
                         </div>
                       </div>
                     </div>
@@ -249,26 +234,27 @@ export default function GamesGrid({ brandId, games }) {
               </div>
             )}
 
-            {/* Back to Casino Button - Premium Design */}
-            <div className="text-center mt-10 md:mt-14">
-              <a
-                href="/casino"
-                className="inline-flex items-center gap-2 px-8 py-3 md:px-10 md:py-4 bg-gradient-to-r from-purple-600 to-pink-600 rounded-full text-white text-sm md:text-base font-bold hover:shadow-xl hover:shadow-purple-500/40 transition-all hover:scale-105"
+            {/* Back to Home Button */}
+            <div className="text-center mt-12 md:mt-16">
+              <button
+                onClick={() => router.push('/')}
+                className="inline-flex items-center gap-2 px-8 py-3 md:px-10 md:py-4 bg-gradient-to-r from-orange-600 to-amber-600 rounded-full text-white text-sm md:text-base font-bold hover:shadow-xl hover:shadow-orange-500/40 transition-all hover:scale-105 border border-orange-400/30"
               >
-                <span>← Back to Casino</span>
-              </a>
+                <ArrowLeft className="w-4 h-4" />
+                <span>হোমপেজে ফিরে যান</span>
+              </button>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Launching Overlay - EXACT SAME AS CASINO PAGE */}
+      {/* Launching Overlay */}
       {isLaunching && (
-        <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-orange-950/90 backdrop-blur-md flex items-center justify-center z-50">
           <div className="text-center">
-            <div className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-            <div className="text-xl font-bold text-white">Launching Game...</div>
-            <div className="text-gray-400 text-sm mt-2">Please wait</div>
+            <div className="w-16 h-16 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <div className="text-xl font-bold text-white drop-shadow-lg">গেম লোড হচ্ছে...</div>
+            <div className="text-orange-200 text-sm mt-2">অপেক্ষা করুন</div>
           </div>
         </div>
       )}

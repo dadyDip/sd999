@@ -1,16 +1,40 @@
+// app/api/casino/callback/route.js
 import { NextResponse } from 'next/server';
-import prisma from '@/server/prisma';
+import { PrismaClient } from '@prisma/client';
 import { updateTurnover } from '@/lib/turnover-tracker';
 
-// ==================== CACHE & STATE MANAGEMENT ====================
+// ==================== CONNECTION POOLING ====================
+const globalForPrisma = global;
+
+if (!globalForPrisma.prisma) {
+  globalForPrisma.prisma = new PrismaClient({
+    log: ['error'],
+    transactionOptions: {
+      maxWait: 5000,
+      timeout: 10000,
+    },
+  });
+  
+  // Apply SQLite optimizations
+  Promise.resolve().then(async () => {
+    try {
+      await globalForPrisma.prisma.$queryRawUnsafe('PRAGMA journal_mode = WAL');
+      await globalForPrisma.prisma.$queryRawUnsafe('PRAGMA synchronous = NORMAL');
+      await globalForPrisma.prisma.$queryRawUnsafe('PRAGMA busy_timeout = 5000');
+    } catch (e) {}
+  });
+}
+
+const prisma = globalForPrisma.prisma;
+
+// ==================== BET TRACKER ====================
 class BetTracker {
   constructor() {
-    this.activeBets = new Map(); // gameRound -> { userId, betAmount, timestamp }
-    this.processedRounds = new Set(); // Track fully processed rounds
-    this.BET_TIMEOUT = 300000; // 5 minutes
-    this.CACHE_CLEANUP = 60000; // 1 minute
+    this.activeBets = new Map();
+    this.processedRounds = new Set();
+    this.BET_TIMEOUT = 300000;
+    this.CACHE_CLEANUP = 60000;
     
-    // Periodic cleanup
     setInterval(() => this.cleanup(), this.CACHE_CLEANUP);
   }
   
@@ -22,14 +46,6 @@ class BetTracker {
     });
   }
   
-  getBet(gameRound) {
-    const bet = this.activeBets.get(gameRound);
-    if (bet) {
-      bet.timestamp = Date.now();
-    }
-    return bet;
-  }
-  
   removeBet(gameRound) {
     this.activeBets.delete(gameRound);
     this.processedRounds.add(gameRound);
@@ -39,17 +55,23 @@ class BetTracker {
     return this.processedRounds.has(gameRound);
   }
   
+  // CRITICAL FIX: Exclude current round from pending check
+  hasPreviousBet(userId, currentGameRound) {
+    for (const [round, bet] of this.activeBets.entries()) {
+      if (bet.userId === userId && round !== currentGameRound) {
+        return { round, betAmount: bet.betAmount };
+      }
+    }
+    return null;
+  }
+  
   cleanup() {
     const now = Date.now();
-    
-    // Clean old active bets
     for (const [round, bet] of this.activeBets.entries()) {
       if (now - bet.timestamp > this.BET_TIMEOUT) {
         this.activeBets.delete(round);
       }
     }
-    
-    // Clean old processed rounds
     if (this.processedRounds.size > 1000) {
       const array = Array.from(this.processedRounds);
       const toRemove = array.slice(0, array.length - 1000);
@@ -65,18 +87,51 @@ class BetTracker {
   }
 }
 
-// Global instance
 const betTracker = new BetTracker();
 
-// ==================== MAIN CALLBACK HANDLER ====================
+// ==================== SIMPLE QUEUE ====================
+class SimpleQueue {
+  constructor() {
+    this.queue = [];
+    this.processing = false;
+    this.MAX_CONCURRENT = 1; // Single file = single thread
+  }
+  
+  async add(task) {
+    return new Promise((resolve, reject) => {
+      this.queue.push({ task, resolve, reject });
+      this.process();
+    });
+  }
+  
+  async process() {
+    if (this.processing || this.queue.length === 0) return;
+    this.processing = true;
+    
+    while (this.queue.length > 0) {
+      const { task, resolve, reject } = this.queue.shift();
+      try {
+        const result = await task();
+        resolve(result);
+      } catch (error) {
+        reject(error);
+      }
+      await new Promise(r => setTimeout(r, 10));
+    }
+    
+    this.processing = false;
+  }
+}
+
+const callbackQueue = new SimpleQueue();
+
+// ==================== MAIN HANDLER ====================
 export async function POST(request) {
   const startTime = Date.now();
   
   try {
-    // 1. Parse and validate request
     const url = new URL(request.url);
     const matchId = url.searchParams.get('matchId') || '';
-    
     const body = await request.json().catch(() => ({}));
     
     const memberAccount = String(body.member_account || '1000');
@@ -85,129 +140,132 @@ export async function POST(request) {
     const gameRound = String(body.game_round || '');
     const casinoId = parseInt(memberAccount) || 0;
     
-    // 2. Validate input
     if (!gameRound) {
-      console.error('❌ Missing gameRound');
-      return NextResponse.json({
-        credit_amount: 0,
-        timestamp: Date.now(),
-        error: 'Invalid request'
-      }, { status: 400 });
+      return NextResponse.json({ credit_amount: 0, timestamp: Date.now() }, { status: 400 });
     }
     
-    // 3. Check for duplicate processing (for crash games)
+    // Only cache crash callbacks
     if (betTracker.isProcessed(gameRound) && betAmount === 0 && winAmount === 0) {
+      const user = await prisma.user.findFirst({ where: { casinoId }, select: { balance: true } });
       return NextResponse.json({
-        credit_amount: 0,
+        credit_amount: user ? parseFloat((user.balance / 100).toFixed(2)) : 0,
         timestamp: Date.now(),
         cached: true
       });
     }
     
-    // 4. Get user
-    const user = await prisma.user.findFirst({
-      where: { casinoId: casinoId },
-      select: { 
-        id: true, 
-        balance: true, 
-        isBanned: true,
-        lockedBalance: true
-      }
+    // Process in queue
+    const result = await callbackQueue.add(async () => {
+      return await processCallback({ matchId, memberAccount, betAmount, winAmount, gameRound, casinoId });
     });
     
-    if (!user) {
-      console.error(`❌ User not found for casinoId: ${casinoId}`);
-      return NextResponse.json({
-        credit_amount: 0,
-        timestamp: Date.now(),
-        error: 'User not found'
-      }, { status: 404 });
-    }
-    
-    if (user.isBanned) {
-      console.error(`🚫 Banned user attempted callback: ${user.id}`);
-      return NextResponse.json({
-        credit_amount: 0,
-        timestamp: Date.now(),
-        error: 'Account suspended'
-      }, { status: 403 });
-    }
-    
-    // 5. Determine callback type and process
-    const type = determineCallbackType(betAmount, winAmount);
-    
-    console.log(`📥 Callback [${type}]:`, { 
-      casinoId, 
-      betAmount, 
-      winAmount, 
-      gameRound,
-      userId: user.id,
-      matchId,
-      lockedBalance: user.lockedBalance
-    });
-    
-    let newBalance = user.balance;
-    let transactionResult = null;
-    
-    switch(type) {
-      case 'BET_PLACED':
-        transactionResult = await handleBetPlaced(user.id, gameRound, betAmount, user.balance, matchId, user.lockedBalance);
-        newBalance = transactionResult.newBalance;
-        betTracker.trackBet(gameRound, user.id, betAmount);
-        break;
-        
-      case 'GAME_WIN':
-        transactionResult = await handleGameWin(user.id, gameRound, winAmount, user.balance, matchId);
-        newBalance = transactionResult.newBalance;
-        betTracker.removeBet(gameRound);
-        break;
-        
-      case 'GAME_CRASH':
-        transactionResult = await handleGameCrash(user.id, gameRound, user.balance);
-        newBalance = transactionResult.newBalance;
-        betTracker.removeBet(gameRound);
-        break;
-        
-      case 'REGULAR_RESULT':
-        transactionResult = await handleRegularResult(user.id, gameRound, betAmount, winAmount, user.balance, matchId);
-        newBalance = transactionResult.newBalance;
-        break;
-        
-      default:
-        console.error(`❓ Unknown callback type: ${type}`);
-        newBalance = user.balance;
-    }
-    
-    // 6. Calculate and send response
-    const creditAmount = parseFloat((newBalance / 100).toFixed(2));
-    const processingTime = Date.now() - startTime;
-    
-    console.log(`✅ ${type} processed in ${processingTime}ms:`, {
-      oldBalance: user.balance,
-      newBalance,
-      creditAmount,
-      netChange: newBalance - user.balance,
-      turnoverApplied: transactionResult?.turnoverApplied || 0
-    });
+    console.log(`✅ ${Date.now() - startTime}ms:`, { casinoId, gameRound, newBalance: result.newBalance });
     
     return NextResponse.json({
-      credit_amount: creditAmount,
+      credit_amount: parseFloat((result.newBalance / 100).toFixed(2)),
       timestamp: Date.now(),
-      balance_paisa: newBalance
+      balance_paisa: result.newBalance
     });
     
   } catch (error) {
-    console.error('🔥 Callback error:', error.message);
-    
-    return NextResponse.json({
-      credit_amount: 0,
-      timestamp: Date.now(),
-      error: 'Internal server error'
-    }, { status: 500 });
+    console.error('🔥', error.message);
+    try {
+      const body = await request.json().catch(() => ({}));
+      const user = await prisma.user.findFirst({ where: { casinoId: parseInt(body.member_account) || 0 }, select: { balance: true } });
+      return NextResponse.json({ credit_amount: user ? parseFloat((user.balance / 100).toFixed(2)) : 0, timestamp: Date.now() });
+    } catch {
+      return NextResponse.json({ credit_amount: 0, timestamp: Date.now() });
+    }
   }
 }
 
-// ==================== HELPER FUNCTIONS ====================
+// ==================== PROCESSING ====================
+async function processCallback({ matchId, memberAccount, betAmount, winAmount, gameRound, casinoId }) {
+  const user = await prisma.user.findFirst({
+    where: { casinoId },
+    select: { id: true, balance: true, isBanned: true }
+  });
+  
+  if (!user) throw new Error(`User not found: ${casinoId}`);
+  if (user.isBanned) throw new Error(`Banned user: ${user.id}`);
+  
+  const type = determineCallbackType(betAmount, winAmount);
+  
+  // CRITICAL: Only check for PREVIOUS bets on NEW bets
+  if (type === 'BET_PLACED') {
+    const previousBet = betTracker.hasPreviousBet(user.id, gameRound);
+    if (previousBet) {
+      console.log(`🎯 Auto-loss for previous round ${previousBet.round}`);
+      // Fire and forget - NO AWAIT
+      setTimeout(() => {
+        handleAutoLoss(user.id, previousBet.round, previousBet.betAmount).catch(e => {});
+      }, 0);
+    }
+  }
+  
+  console.log(`📥 [${type}]:`, { casinoId, betAmount, winAmount, gameRound, userId: user.id });
+  
+  let newBalance = user.balance;
+  
+  switch(type) {
+    case 'BET_PLACED':
+      newBalance = await handleBetPlaced(user.id, gameRound, betAmount, user.balance, matchId);
+      betTracker.trackBet(gameRound, user.id, betAmount);
+      break;
+    case 'GAME_WIN':
+      newBalance = await handleGameWin(user.id, gameRound, winAmount, user.balance, matchId);
+      betTracker.removeBet(gameRound);
+      break;
+    case 'GAME_CRASH':
+      newBalance = await handleGameCrash(user.id, gameRound, user.balance);
+      betTracker.removeBet(gameRound);
+      break;
+    case 'REGULAR_RESULT':
+      newBalance = await handleRegularResult(user.id, gameRound, betAmount, winAmount, user.balance, matchId);
+      break;
+  }
+  
+  return { newBalance };
+}
+
+// ==================== AUTO-LOSS (COMPLETELY ISOLATED) ====================
+async function handleAutoLoss(userId, gameRound, betAmount) {
+  // Wait a tiny bit to let the main process finish
+  await new Promise(r => setTimeout(r, 100));
+  
+  try {
+    const betPaisa = Math.round(betAmount * 100);
+    
+    // Update spin if it still exists and is pending
+    await prisma.casinoSpin.updateMany({
+      where: {
+        userId: userId,
+        gameRound: gameRound,
+        status: 'PENDING'
+      },
+      data: { status: 'COMPLETED' }
+    });
+    
+    // Update turnover in background
+    updateTurnover(
+      userId,
+      betPaisa,
+      0,
+      betPaisa,
+      'casino_auto_loss',
+      gameRound
+    ).catch(e => {});
+    
+    // Remove from tracker
+    betTracker.removeBet(gameRound);
+    
+    console.log(`✅ Auto-loss done: ${gameRound}`);
+  } catch (error) {
+    console.error('Auto-loss error:', error.message);
+  }
+}
+
+// ==================== CORE FUNCTIONS ====================
 function determineCallbackType(betAmount, winAmount) {
   if (betAmount > 0 && winAmount === 0) return 'BET_PLACED';
   if (betAmount === 0 && winAmount > 0) return 'GAME_WIN';
@@ -216,273 +274,102 @@ function determineCallbackType(betAmount, winAmount) {
   return 'UNKNOWN';
 }
 
-async function handleBetPlaced(userId, gameRound, betAmount, currentBalance, matchId, lockedBalance) {
+async function handleBetPlaced(userId, gameRound, betAmount, currentBalance, matchId) {
   const betPaisa = Math.round(betAmount * 100);
   const newBalance = currentBalance - betPaisa;
   
   await prisma.$transaction(async (tx) => {
-    // Update user balance
-    await tx.user.update({
-      where: { id: userId },
-      data: { balance: newBalance }
-    });
-    
-    // Create pending spin record
+    await tx.user.update({ where: { id: userId }, data: { balance: newBalance } });
     await tx.casinoSpin.create({
       data: {
-        userId: userId,
-        gameCode: 'CRASH',
-        gameName: 'Crash Game',
-        betAmount: betPaisa,
-        winAmount: 0,
-        netResult: -betPaisa,
-        gameRound: gameRound,
-        timestamp: new Date(),
-        status: 'PENDING',
-        matchId: matchId || null
+        userId, gameCode: 'CRASH', gameName: 'Crash Game',
+        betAmount: betPaisa, winAmount: 0, netResult: -betPaisa,
+        gameRound, timestamp: new Date(), status: 'PENDING', matchId: matchId || null
       }
     });
   });
   
-  return { betPaisa, newBalance };
+  return newBalance;
 }
 
 async function handleGameWin(userId, gameRound, winAmount, currentBalance, matchId) {
   const winPaisa = Math.round(winAmount * 100);
   const newBalance = currentBalance + winPaisa;
-  let turnoverApplied = 0;
   
   const result = await prisma.$transaction(async (tx) => {
-    // First, get the pending spin to update it
-    const pendingSpin = await tx.casinoSpin.findFirst({
-      where: {
-        userId: userId,
-        gameRound: gameRound,
-        status: 'PENDING'
-      }
-    });
+    const pendingSpin = await tx.casinoSpin.findFirst({ where: { userId, gameRound, status: 'PENDING' } });
     
     if (!pendingSpin) {
-      // If no pending spin, check if a completed spin already exists
-      const existingSpin = await tx.casinoSpin.findFirst({
-        where: {
-          userId: userId,
-          gameRound: gameRound,
-          status: 'COMPLETED'
-        }
-      });
-      
-      if (existingSpin) {
-        // Spin already processed, just update balance
-        await tx.user.update({
-          where: { id: userId },
-          data: { balance: newBalance }
-        });
-        return existingSpin;
-      }
-      
-      throw new Error(`No spin found for round: ${gameRound}`);
+      await tx.user.update({ where: { id: userId }, data: { balance: newBalance } });
+      return null;
     }
     
-    // Update spin record with win
-    const updatedSpin = await tx.casinoSpin.update({
-      where: { id: pendingSpin.id },
-      data: {
-        winAmount: winPaisa,
-        netResult: winPaisa,
-        status: 'COMPLETED'
-      }
-    });
-    
-    // Update user balance
-    await tx.user.update({
-      where: { id: userId },
-      data: { balance: newBalance }
-    });
-    
-    return updatedSpin;
+    await tx.casinoSpin.update({ where: { id: pendingSpin.id }, data: { winAmount: winPaisa, netResult: winPaisa, status: 'COMPLETED' } });
+    await tx.user.update({ where: { id: userId }, data: { balance: newBalance } });
+    return pendingSpin;
   });
   
-  // ========== TURNOVER TRACKING FOR WIN ==========
-  // For win-only callbacks, calculate effective turnover (0.5% of bet for wins)
-  const effectiveTurnover = Math.max(1, Math.round(result.betAmount * 0.005)); // 0.5% of bet, min 1 paisa
-  turnoverApplied = effectiveTurnover;
-  
-  console.log(`🏆 Win turnover: Bet=${result.betAmount}, Win=${winPaisa}, Turnover=${effectiveTurnover} (0.5%)`);
-  
-  try {
-    await updateTurnover(
-      userId, 
-      result.betAmount,    // original bet amount
-      winPaisa,            // win amount
-      effectiveTurnover,   // effective turnover (0.5% of bet for wins)
-      'casino_crash',      // game type
-      matchId || gameRound // identifier
-    );
-  } catch (turnoverError) {
-    console.error('Turnover tracking error in win:', turnoverError);
+  if (result?.betAmount) {
+    const turnover = Math.max(1, Math.round(result.betAmount * 0.005));
+    setTimeout(() => {
+      updateTurnover(userId, result.betAmount, winPaisa, turnover, 'casino_crash', matchId || gameRound).catch(e => {});
+    }, 0);
   }
-  // ================================================
   
-  return { winPaisa, newBalance, turnoverApplied };
+  return newBalance;
 }
 
 async function handleGameCrash(userId, gameRound, currentBalance) {
-  let turnoverApplied = 0;
+  const pendingSpin = await prisma.casinoSpin.findFirst({ where: { userId, gameRound, status: 'PENDING' } });
   
-  try {
-    // Get and update the pending spin in one transaction
-    const result = await prisma.$transaction(async (tx) => {
-      const pendingSpin = await tx.casinoSpin.findFirst({
-        where: {
-          userId: userId,
-          gameRound: gameRound,
-          status: 'PENDING'
-        }
-      });
-      
-      if (!pendingSpin) {
-        // Check if spin already completed
-        const existingSpin = await tx.casinoSpin.findFirst({
-          where: {
-            userId: userId,
-            gameRound: gameRound,
-            status: 'COMPLETED'
-          }
-        });
-        
-        if (existingSpin) {
-          return existingSpin;
-        }
-        
-        console.log(`ℹ️ No pending spin found for crash round: ${gameRound}`);
-        return null;
-      }
-      
-      // Mark spin as completed (crash = loss)
-      const updatedSpin = await tx.casinoSpin.update({
-        where: { id: pendingSpin.id },
-        data: {
-          status: 'COMPLETED'
-          // winAmount stays 0, netResult stays -betAmount
-        }
-      });
-      
-      return updatedSpin;
-    });
+  if (pendingSpin) {
+    await prisma.casinoSpin.update({ where: { id: pendingSpin.id }, data: { status: 'COMPLETED' } });
     
-    // ========== TURNOVER TRACKING FOR LOSS ==========
-    // For crash/loss, count full bet amount towards turnover
-    if (result) {
-      const effectiveTurnover = result.betAmount; // Full bet for loss
-      turnoverApplied = effectiveTurnover;
-      
-      console.log(`💥 Crash/Loss turnover: Bet=${result.betAmount}, Turnover=${effectiveTurnover} (100%)`);
-      
-      try {
-        await updateTurnover(
-          userId, 
-          result.betAmount,    // original bet amount
-          0,                   // win amount (0 for loss)
-          effectiveTurnover,   // effective turnover (full bet for loss)
-          'casino_crash',      // game type
-          gameRound            // identifier
-        );
-      } catch (turnoverError) {
-        console.error('Turnover tracking error in crash:', turnoverError);
-      }
-    }
-  } catch (error) {
-    console.error('Error handling game crash:', error);
+    setTimeout(() => {
+      updateTurnover(userId, pendingSpin.betAmount, 0, pendingSpin.betAmount, 'casino_crash', gameRound).catch(e => {});
+    }, 0);
   }
   
-  return { newBalance: currentBalance, turnoverApplied }; // No balance change
+  return currentBalance;
 }
 
 async function handleRegularResult(userId, gameRound, betAmount, winAmount, currentBalance, matchId) {
   const betPaisa = Math.round(betAmount * 100);
   const winPaisa = Math.round(winAmount * 100);
-  const netChange = winPaisa - betPaisa;
-  const newBalance = currentBalance + netChange;
-  let turnoverApplied = 0;
+  const newBalance = currentBalance + (winPaisa - betPaisa);
   
   await prisma.$transaction(async (tx) => {
-    // Update user balance
-    await tx.user.update({
-      where: { id: userId },
-      data: { balance: newBalance }
-    });
-    
-    // Create spin record
+    await tx.user.update({ where: { id: userId }, data: { balance: newBalance } });
     await tx.casinoSpin.create({
       data: {
-        userId: userId,
-        gameCode: 'CASINO',
-        gameName: 'Casino Game',
-        betAmount: betPaisa,
-        winAmount: winPaisa,
-        netResult: netChange,
-        gameRound: gameRound,
-        timestamp: new Date(),
-        status: 'COMPLETED',
-        matchId: matchId || null
+        userId, gameCode: 'CASINO', gameName: 'Casino Game',
+        betAmount: betPaisa, winAmount: winPaisa, netResult: winPaisa - betPaisa,
+        gameRound, timestamp: new Date(), status: 'COMPLETED', matchId: matchId || null
       }
     });
   });
   
-  // ========== TURNOVER TRACKING FOR REGULAR GAMES ==========
-  try {
-    // Calculate effective turnover based on win/loss
-    let effectiveTurnover;
-    
-    if (winPaisa === 0) {
-      // Loss: full bet counts towards turnover
-      effectiveTurnover = betPaisa;
-      console.log(`❌ Loss turnover: Bet=${betPaisa}, Turnover=${effectiveTurnover} (100%)`);
-    } else if (winPaisa >= betPaisa) {
-      // Win (or break-even): only 0.5% of bet counts
-      effectiveTurnover = Math.max(1, Math.round(betPaisa * 0.005)); // 0.5% of bet, min 1 paisa
-      console.log(`✅ Win turnover: Bet=${betPaisa}, Win=${winPaisa}, Turnover=${effectiveTurnover} (0.5%)`);
-    } else {
-      // Partial win: only the lost portion counts
-      effectiveTurnover = betPaisa - winPaisa;
-      console.log(`⚠️ Partial win turnover: Bet=${betPaisa}, Win=${winPaisa}, Turnover=${effectiveTurnover} (lost portion)`);
-    }
-    
-    turnoverApplied = effectiveTurnover;
-    
-    await updateTurnover(
-      userId, 
-      betPaisa,               // bet amount
-      winPaisa,               // win amount
-      effectiveTurnover,      // effective turnover
-      'casino_slots',         // game type
-      matchId || gameRound    // identifier
-    );
-  } catch (turnoverError) {
-    console.error('Turnover tracking error in regular result:', turnoverError);
-  }
-  // ================================================
+  let turnover;
+  if (winPaisa === 0) turnover = betPaisa;
+  else if (winPaisa >= betPaisa) turnover = Math.max(1, Math.round(betPaisa * 0.005));
+  else turnover = betPaisa - winPaisa;
   
-  return { betPaisa, winPaisa, netChange, newBalance, turnoverApplied };
+  setTimeout(() => {
+    updateTurnover(userId, betPaisa, winPaisa, turnover, 'casino_slots', matchId || gameRound).catch(e => {});
+  }, 0);
+  
+  return newBalance;
 }
 
-// ==================== HEALTH ENDPOINT ====================
+// ==================== HEALTH ====================
 export async function GET() {
-  const stats = betTracker.getStats();
-  
   return NextResponse.json({
     status: 'healthy',
     timestamp: new Date().toISOString(),
-    stats: stats,
-    memory: {
-      heapUsed: Math.round(process.memoryUsage().heapUsed / 1024 / 1024) + 'MB',
-      rss: Math.round(process.memoryUsage().rss / 1024 / 1024) + 'MB'
-    }
+    stats: betTracker.getStats()
   });
 }
 
-// ==================== OPTIONS HANDLER ====================
 export async function OPTIONS() {
   return new NextResponse(null, {
     status: 200,

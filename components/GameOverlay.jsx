@@ -100,7 +100,7 @@ export default function GameOverlay() {
                   </div>
                   <div>
                     <div className="text-white font-bold">Game Controls</div>
-                    <div className="text-xs text-purple-300">RoyalsBet Casino</div>
+                    <div className="text-xs text-purple-300">SD999 Casino</div>
                   </div>
                 </div>
                 <button 

@@ -3,28 +3,18 @@ import { Providers } from "./providers";
 
 // Essential brand variations (9-10 key ones)
 const brandVariations = [
-  "Ashokheli",
-  "Ashokeli",
-  "Asokheli",
-  "Asokeli",
-  "Aso Kheli",
-  "Aso Keli",
-  "আসোকেলি",
-  "Ashokheli Tash",
-  "Ashokheli Game",
-  "Ashokheli Casino"
+  "sd999",
 ];
 
 export const metadata = {
-  title: "Ashokheli - Play Aviator, Callbreak, Ludo Games Online",
-  description: `Ashokheli - Play Aviator, Callbreak, Ludo, Spribe, JILI games. Real money online casino. Ashokeli, Asokheli, আসোকেলি খেলুন।`,
-  keywords: "Ashokheli, Ashokeli, Asokheli, আসোকেলি, Aviator game, Callbreak, Ludo, online casino",
+  title: "SD999",
+  keywords: "sd999, SD999, Sd999",
   manifest: "/manifest.json",
   themeColor: "#000000",
   openGraph: {
-    title: "Ashokheli - Play & Win Real Money",
+    title: "SD999 - Play & Win Real Money",
     description: "Play Aviator, Callbreak, Ludo and casino games online",
-    images: ["https://ashokheli.top/logo.png"],
+    images: ["https://sd99909.com/logo.png"],
   },
 };
 
@@ -50,7 +40,7 @@ export default function RootLayout({ children }) {
         <link rel="apple-touch-icon" href="/icon-192.png" />
         
         {/* Social/OG Image */}
-        <meta property="og:image" content="https://ashokheli.top/icon-192.png" />
+        <meta property="og:image" content="https://sd99909.com/icon-192.png" />
         <meta property="og:image:width" content="192" />
         <meta property="og:image:height" content="192" />
         
@@ -69,10 +59,10 @@ export default function RootLayout({ children }) {
             __html: JSON.stringify({
               "@context": "https://schema.org",
               "@type": "WebSite",
-              "name": "Ashokheli",
+              "name": "",
               "alternateName": brandVariations,
-              "url": "https://ashokheli.top",
-              "logo": "https://ashokheli.top/icon-192.png"
+              "url": "https://sd99909.com",
+              "logo": "https://sd99909.com/icon-192.png"
             })
           }}
         />
@@ -81,7 +71,7 @@ export default function RootLayout({ children }) {
       <body className="bg-gray-950 text-white">
         {/* Minimal hidden text for variations */}
         <div style={{ display: 'none' }} aria-hidden="true">
-          Ashokheli Ashokeli Asokheli আসোকেলি
+          sd999
         </div>
         
         <div className="app-root">

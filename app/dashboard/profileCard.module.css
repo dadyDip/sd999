@@ -1,0 +1,112 @@
+.card {
+  position: relative;
+  border-radius: 24px;
+  padding: 22px;
+  background: linear-gradient(135deg,#e9eef2,#dfe5ea);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+  overflow: hidden;
+}
+
+.medalBg {
+  position: absolute;
+  right: -30px;
+  top: -20px;
+  width: 180px;
+  opacity: 0.18;
+}
+
+.checkIn {
+  position: absolute;
+  right: 0;
+  top: 0;
+  background: linear-gradient(180deg,#ff4d4d,#d10c0c);
+  color: white;
+  padding: 8px 20px;
+  font-weight: 600;
+  border-bottom-left-radius: 20px;
+  font-size: 13px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  border: 3px solid white;
+  box-shadow: 0 3px 8px rgba(0,0,0,0.2);
+}
+
+.username {
+  font-size: 18px;
+  font-weight: 700;
+  color: #111;
+}
+
+.subText {
+  font-size: 13px;
+  color: #666;
+}
+
+.balanceRow {
+  margin-top: 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.balance {
+  font-size: 30px;
+  font-weight: 800;
+}
+
+.buttons {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: repeat(3,1fr);
+  gap: 10px;
+}
+
+.btn {
+  background: #f1f3f6;
+  border-radius: 30px;
+  padding: 10px;
+  font-weight: 600;
+  box-shadow:
+    inset 3px 3px 6px rgba(0,0,0,0.12),
+    inset -3px -3px 6px rgba(255,255,255,0.7);
+  transition: all .2s ease;
+}
+
+.btn:hover {
+  transform: translateY(-1px);
+}
+
+.vipBadge {
+  display: inline-block;
+  padding: 4px 12px;
+  font-size: 12px;
+  border-radius: 20px;
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+
+.vip0 {
+  background: #fff;
+  color: #444;
+  border: 1px solid #ccc;
+}
+
+.vip1 {
+  background: linear-gradient(135deg,#b87333,#e0a96d);
+  color: white;
+}
+
+.vip2 {
+  background: linear-gradient(135deg,#c0c0c0,#8e8e8e);
+  color: white;
+}

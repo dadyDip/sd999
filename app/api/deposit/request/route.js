@@ -1,7 +1,7 @@
-// app/api/deposit/request/route.js
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyToken } from "@/lib/auth";
+import { sendTelegramNotification, formatDepositNotification } from "@/lib/telegram"; // ✅ ADD THIS
 
 const MINIMUM_DEPOSIT = 100;
 const MAXIMUM_DEPOSIT = 25000;
@@ -166,6 +166,29 @@ export async function POST(req) {
         }
       });
     }
+
+    // // ✅ SEND TELEGRAM NOTIFICATION (LIKE WITHDRAW)
+    // const displayName = userInfo?.firstName 
+    //   ? `${userInfo.firstName}${userInfo.lastName ? ' ' + userInfo.lastName : ''}`
+    //   : userInfo?.phone || user.id;
+
+    // // Don't await - fire and forget
+    // sendTelegramNotification(
+    //   formatDepositNotification(
+    //     { 
+    //       id: user.id,
+    //       displayName,
+    //       phone: userInfo?.phone 
+    //     }, 
+    //     { 
+    //       method: method.toLowerCase(), 
+    //       amount: paisa, 
+    //       trxId: trimmedTrxId 
+    //     }
+    //   )
+    // ).catch(error => {
+    //   console.error("Failed to send deposit Telegram notification:", error);
+    // });
 
     return NextResponse.json({ 
       success: true, 
